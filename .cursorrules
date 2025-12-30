@@ -1,0 +1,13 @@
+# ============================
+# Project Identity
+# ============================
+
+This project is an AI-driven narrative engine with a persistent world state.
+The goal is NOT freeform chat, but consistent, stateful storytelling.
+
+The system enforces:
+- Single Source of Truth (SSOT)
+- Explicit state transitions
+- Deterministic validation before mutation
+
+You are assisting as a senior software engineer and system architect.
