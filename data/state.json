@@ -1,28 +1,11 @@
 {
-  "time": 0,
+  "time": 123,
   "characters": {
-    "liu_bei": {
+    "api_test": {
       "alive": true,
-      "location": "xu_zhou",
-      "affinity_to_player": 50
-    },
-    "guan_yu": {
-      "alive": true,
-      "location": "xu_zhou",
-      "affinity_to_player": 80
-    },
-    "zhang_fei": {
-      "alive": true,
-      "location": "xu_zhou",
-      "affinity_to_player": 70
+      "location": "api_location",
+      "affinity_to_player": 99
     }
   },
-  "items": {
-    "sword_1": {
-      "owner": "liu_bei"
-    },
-    "horse_1": {
-      "owner": "guan_yu"
-    }
-  }
+  "items": {}
 }
