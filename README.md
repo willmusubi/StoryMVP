@@ -43,21 +43,42 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ## API 端点
 
 - `GET /` - 返回 "Hello 三国 MVP" 静态页面
+- `GET /state` - 返回当前世界状态 (JSON)
 - `POST /chat` - 使用 `supermind-agent-v1` 模型进行 AI 对话
 
 ## AI 调用说明
 
 所有 AI 调用都使用 OpenAI SDK，配置如下：
+
 - Base URL: `https://space.ai-builders.com/backend/v1`
 - 模型: `supermind-agent-v1`
 - 认证: 通过 Bearer Token (从环境变量读取)
 
+## 世界状态管理
+
+项目使用 `data/state.json` 文件存储持久化的世界状态。状态结构包含：
+
+- `time`: 当前章节/回合进度或 tick (整数)
+- `characters`: 角色字典，每个角色包含：
+  - `alive`: 是否存活 (布尔值)
+  - `location`: 当前位置 (字符串)
+  - `affinity_to_player`: 对玩家的好感度 (-100~100)
+- `items`: 物品字典，每个物品包含：
+  - `owner`: 拥有者 (字符串，角色 ID)
+
+状态管理函数：
+
+- `load_state()`: 读取 state.json，如果文件不存在或损坏则返回默认状态
+- `save_state(state)`: 原子写入 state.json（使用临时文件+重命名，避免写坏文件）
+
 ## 示例请求
 
 ```bash
+# 获取当前世界状态
+curl http://localhost:8000/state
+
 # 测试 POST /chat
 curl -X POST "http://localhost:8000/chat" \
   -H "Content-Type: application/json" \
   -d '{"message": "你好"}'
 ```
-

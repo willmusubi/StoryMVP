@@ -3,8 +3,10 @@ from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
 from openai import OpenAI
 import os
+import json
+from pathlib import Path
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 
 # 加载环境变量
 load_dotenv()
@@ -21,6 +23,63 @@ client = OpenAI(
     base_url="https://space.ai-builders.com/backend/v1",
     api_key=api_key,
 )
+
+# 状态文件路径
+STATE_FILE = Path(__file__).parent / "data" / "state.json"
+
+def load_state() -> Dict[str, Any]:
+    """
+    读取 state.json 文件
+    如果文件不存在，返回默认状态
+    """
+    if not STATE_FILE.exists():
+        # 确保目录存在
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        # 返回默认状态
+        default_state = {
+            "time": 0,
+            "characters": {},
+            "items": {}
+        }
+        save_state(default_state)
+        return default_state
+    
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        # 如果文件损坏，返回默认状态
+        default_state = {
+            "time": 0,
+            "characters": {},
+            "items": {}
+        }
+        save_state(default_state)
+        return default_state
+
+def save_state(state: Dict[str, Any]) -> None:
+    """
+    原子写入 state.json 文件
+    使用临时文件然后重命名，避免写坏文件
+    """
+    # 确保目录存在
+    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    
+    # 创建临时文件
+    temp_file = STATE_FILE.with_suffix(".tmp")
+    
+    try:
+        # 写入临时文件
+        with open(temp_file, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+        
+        # 原子重命名（在支持的系统上这是原子操作）
+        temp_file.replace(STATE_FILE)
+    except Exception as e:
+        # 如果写入失败，删除临时文件
+        if temp_file.exists():
+            temp_file.unlink()
+        raise e
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -55,6 +114,14 @@ async def root():
 
 class ChatRequest(BaseModel):
     message: Optional[str] = None
+
+@app.get("/state")
+async def get_state():
+    """
+    返回当前世界状态
+    """
+    state = load_state()
+    return state
 
 @app.post("/chat")
 async def chat(request: Optional[ChatRequest] = None):
