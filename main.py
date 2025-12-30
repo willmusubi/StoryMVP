@@ -26,6 +26,8 @@ client = OpenAI(
 
 # 状态文件路径
 STATE_FILE = Path(__file__).parent / "data" / "state.json"
+# 故事文件路径
+STORY_FILE = Path(__file__).parent / "data" / "story.md"
 
 def load_state() -> Dict[str, Any]:
     """
@@ -81,6 +83,20 @@ def save_state(state: Dict[str, Any]) -> None:
             temp_file.unlink()
         raise e
 
+def load_story() -> str:
+    """
+    读取 story.md 文件内容
+    如果文件不存在，返回空字符串
+    """
+    if not STORY_FILE.exists():
+        return ""
+    
+    try:
+        with open(STORY_FILE, "r", encoding="utf-8") as f:
+            return f.read()
+    except IOError:
+        return ""
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return """
@@ -122,6 +138,21 @@ async def get_state():
     """
     state = load_state()
     return state
+
+@app.get("/lore")
+async def get_lore():
+    """
+    返回故事内容的前 2000 字符
+    避免返回过大的内容
+    """
+    story = load_story()
+    # 返回前 2000 字符
+    truncated = story[:2000] if len(story) > 2000 else story
+    return {
+        "content": truncated,
+        "total_length": len(story),
+        "truncated": len(story) > 2000
+    }
 
 @app.post("/chat")
 async def chat(request: Optional[ChatRequest] = None):

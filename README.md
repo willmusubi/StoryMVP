@@ -44,6 +44,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 - `GET /` - 返回 "Hello 三国 MVP" 静态页面
 - `GET /state` - 返回当前世界状态 (JSON)
+- `GET /lore` - 返回故事内容的前 2000 字符 (JSON)
 - `POST /chat` - 使用 `supermind-agent-v1` 模型进行 AI 对话
 
 ## AI 调用说明
@@ -71,11 +72,18 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 - `load_state()`: 读取 state.json，如果文件不存在或损坏则返回默认状态
 - `save_state(state)`: 原子写入 state.json（使用临时文件+重命名，避免写坏文件）
 
+故事管理函数：
+
+- `load_story()`: 读取 story.md 文件内容，如果文件不存在则返回空字符串
+
 ## 示例请求
 
 ```bash
 # 获取当前世界状态
 curl http://localhost:8000/state
+
+# 获取故事内容（前 2000 字符）
+curl http://localhost:8000/lore
 
 # 测试 POST /chat
 curl -X POST "http://localhost:8000/chat" \
