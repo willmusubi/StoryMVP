@@ -5,8 +5,13 @@ from openai import OpenAI
 import os
 import json
 from pathlib import Path
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from pydantic import BaseModel, Field
+from typing import Optional, Dict, Any, Literal, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel as _BaseModel
+else:
+    _BaseModel = BaseModel
 
 # 加载环境变量
 load_dotenv()
@@ -97,6 +102,143 @@ def load_story() -> str:
     except IOError:
         return ""
 
+def validate_action(state: Dict[str, Any], action: "Action") -> Dict[str, Any]:
+    """
+    验证动作是否合法
+    
+    返回: {ok: bool, reason?: str}
+    """
+    characters = state.get("characters", {})
+    items = state.get("items", {})
+    
+    # 检查 actor 是否存在
+    if action.actor != "player" and action.actor not in characters:
+        return {"ok": False, "reason": f"执行者 {action.actor} 不存在"}
+    
+    # 检查 actor 是否存活（如果不是 player）
+    if action.actor != "player":
+        actor_char = characters.get(action.actor)
+        if actor_char and not actor_char.get("alive", True):
+            return {"ok": False, "reason": f"执行者 {action.actor} 已死亡"}
+    
+    # 根据动作类型进行验证
+    if action.type in ["talk", "rescue", "give_item"]:
+        # 不能对 alive=false 的角色执行交互
+        if action.target and action.target in characters:
+            target_char = characters[action.target]
+            if not target_char.get("alive", True):
+                return {"ok": False, "reason": f"目标角色 {action.target} 已死亡，无法执行 {action.type}"}
+    
+    if action.type == "move":
+        # move 必须提供 to_location
+        if not action.to_location:
+            return {"ok": False, "reason": "move 动作必须提供 to_location"}
+    
+    if action.type == "give_item":
+        # give_item 必须提供 item
+        if not action.item:
+            return {"ok": False, "reason": "give_item 动作必须提供 item"}
+        
+        # 必须保证 items[item].owner == actor 才能给
+        if action.item not in items:
+            return {"ok": False, "reason": f"物品 {action.item} 不存在"}
+        
+        item_owner = items[action.item].get("owner")
+        if item_owner != action.actor:
+            return {"ok": False, "reason": f"物品 {action.item} 不属于 {action.actor}，当前拥有者: {item_owner}"}
+        
+        # 必须提供 target（接收者）
+        if not action.target:
+            return {"ok": False, "reason": "give_item 动作必须提供 target（接收者）"}
+        
+        # 检查接收者是否存在
+        if action.target not in characters:
+            return {"ok": False, "reason": f"接收者 {action.target} 不存在"}
+    
+    if action.type in ["attack", "rescue"]:
+        # attack/rescue 需要 target 存在且 alive=true
+        if not action.target:
+            return {"ok": False, "reason": f"{action.type} 动作必须提供 target"}
+        
+        if action.target not in characters:
+            return {"ok": False, "reason": f"目标角色 {action.target} 不存在"}
+        
+        target_char = characters[action.target]
+        if not target_char.get("alive", True):
+            return {"ok": False, "reason": f"目标角色 {action.target} 已死亡，无法执行 {action.type}"}
+    
+    return {"ok": True}
+
+def apply_action(state: Dict[str, Any], action: "Action") -> Dict[str, Any]:
+    """
+    应用动作到状态，返回新状态
+    
+    注意：不修改原状态，返回新状态
+    """
+    # 深拷贝状态（简单方式：通过 JSON 序列化/反序列化）
+    import copy
+    new_state = copy.deepcopy(state)
+    
+    characters = new_state.get("characters", {})
+    items = new_state.get("items", {})
+    
+    # 更新时间
+    new_state["time"] = new_state.get("time", 0) + 1
+    
+    if action.type == "move":
+        # 更新 actor 的 location
+        if action.actor == "player":
+            # player 没有在 characters 中，可以创建一个简单的记录
+            # 或者假设 player 的位置存储在 state 的其他地方
+            # 这里我们假设 player 的位置可以存储在 state 的顶层
+            if "player" not in characters:
+                characters["player"] = {
+                    "alive": True,
+                    "location": action.to_location,
+                    "affinity_to_player": 100  # 玩家对自己的好感度
+                }
+            else:
+                characters["player"]["location"] = action.to_location
+        else:
+            if action.actor in characters:
+                characters[action.actor]["location"] = action.to_location
+    
+    elif action.type == "give_item":
+        # 更新物品 owner
+        if action.item in items:
+            items[action.item]["owner"] = action.target
+    
+    elif action.type == "talk":
+        # 只影响 affinity_to_player
+        if action.target and action.target in characters:
+            target_char = characters[action.target]
+            current_affinity = target_char.get("affinity_to_player", 0)
+            
+            # 简单规则：如果 intent 包含"救/帮/保护"则 +10，否则 0
+            intent_lower = action.intent.lower()
+            if any(keyword in intent_lower for keyword in ["救", "帮", "保护", "救", "助", "援"]):
+                new_affinity = min(100, current_affinity + 10)
+            else:
+                new_affinity = current_affinity  # 保持不变
+            
+            target_char["affinity_to_player"] = new_affinity
+    
+    elif action.type == "attack":
+        # 攻击：降低目标的好感度
+        if action.target and action.target in characters:
+            target_char = characters[action.target]
+            current_affinity = target_char.get("affinity_to_player", 0)
+            target_char["affinity_to_player"] = max(-100, current_affinity - 20)
+    
+    elif action.type == "rescue":
+        # 救援：增加目标的好感度
+        if action.target and action.target in characters:
+            target_char = characters[action.target]
+            current_affinity = target_char.get("affinity_to_player", 0)
+            target_char["affinity_to_player"] = min(100, current_affinity + 30)
+    
+    return new_state
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return """
@@ -131,6 +273,17 @@ async def root():
 class ChatRequest(BaseModel):
     message: Optional[str] = None
 
+class Action(BaseModel):
+    """
+    动作协议 Schema
+    """
+    type: Literal["talk", "give_item", "move", "attack", "rescue"]
+    actor: str = Field(default="player", description="执行动作的角色，默认为 player")
+    target: Optional[str] = Field(default=None, description="目标角色或物品")
+    to_location: Optional[str] = Field(default=None, description="目标位置（用于 move）")
+    item: Optional[str] = Field(default=None, description="物品ID（用于 give_item）")
+    intent: str = Field(description="自然语言描述动作意图")
+
 @app.get("/state")
 async def get_state():
     """
@@ -153,6 +306,43 @@ async def get_lore():
         "total_length": len(story),
         "truncated": len(story) > 2000
     }
+
+@app.post("/act")
+async def act(action: Action):
+    """
+    执行动作
+    
+    输入 action，先 validate 再 apply，再 save_state，返回 {ok, state, error?}
+    """
+    try:
+        # 加载当前状态
+        state = load_state()
+        
+        # 验证动作
+        validation = validate_action(state, action)
+        if not validation["ok"]:
+            return {
+                "ok": False,
+                "error": validation.get("reason", "动作验证失败"),
+                "state": state
+            }
+        
+        # 应用动作
+        new_state = apply_action(state, action)
+        
+        # 保存状态
+        save_state(new_state)
+        
+        return {
+            "ok": True,
+            "state": new_state
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": str(e),
+            "state": load_state()  # 返回当前状态
+        }
 
 @app.post("/chat")
 async def chat(request: Optional[ChatRequest] = None):

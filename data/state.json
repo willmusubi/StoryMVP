@@ -1,10 +1,15 @@
 {
-  "time": 123,
+  "time": 0,
   "characters": {
-    "api_test": {
+    "player": {
       "alive": true,
-      "location": "api_location",
-      "affinity_to_player": 99
+      "location": "xu_zhou",
+      "affinity_to_player": 100
+    },
+    "dead_char": {
+      "alive": false,
+      "location": "grave",
+      "affinity_to_player": 0
     }
   },
   "items": {}
