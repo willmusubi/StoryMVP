@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import os
 import json
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, Literal, TYPE_CHECKING, Protocol
@@ -146,9 +147,116 @@ def load_story() -> str:
     except IOError:
         return ""
 
-def build_chat_prompt(state: Dict[str, Any], user_message: str, lore_snippet: Optional[str] = None) -> list[Dict[str, str]]:
+def chunk_story(story_text: str) -> list[str]:
+    """
+    将 story.md 按段落/空行切分成 chunks
+    
+    Returns:
+        chunks 列表，每个 chunk 是一个段落
+    """
+    if not story_text:
+        return []
+    
+    # 按空行分割，过滤掉空字符串
+    chunks = [chunk.strip() for chunk in story_text.split('\n\n') if chunk.strip()]
+    return chunks
+
+def score_chunk(chunk: str, user_message: str, current_time: int) -> float:
+    """
+    对 chunk 进行简单打分
+    
+    打分规则：
+    1. 关键字重叠：统计 user_message 中的关键字在 chunk 中出现的次数
+    2. 角色名称权重：角色名称（2-3字）给予更高权重
+    3. 时间线索：可以根据 current_time 调整（这里先简单实现）
+    
+    Returns:
+        分数（越高越相关）
+    """
+    score = 0.0
+    
+    chunk_lower = chunk.lower()
+    
+    # 常见三国角色名称（2-3字），给予更高权重
+    character_names = ["董卓", "貂蝉", "吕布", "刘备", "关羽", "张飞", "曹操", "孙权", "诸葛亮", 
+                      "周瑜", "袁绍", "袁术", "孙坚", "孙策", "赵云", "马超", "黄忠", "张辽",
+                      "典韦", "许褚", "徐晃", "张郃", "于禁", "乐进", "李典", "曹仁", "曹洪",
+                      "夏侯惇", "夏侯渊", "荀彧", "郭嘉", "贾诩", "司马懿", "姜维", "邓艾"]
+    
+    # 首先：直接检查角色名称匹配（最高优先级）
+    # 这确保即使角色名称在分词时被合并到其他词中，也能被正确识别
+    for char_name in character_names:
+        if char_name in user_message:
+            # 用户消息中包含角色名称
+            if char_name in chunk:
+                # chunk 中也包含该角色名称，给予最高权重
+                count = chunk.count(char_name)
+                score += count * 20.0  # 角色名称直接匹配给予最高权重
+    
+    # 然后：提取其他关键字（简单分词：按空格和标点分割）
+    # 移除标点，提取中文字符和英文单词
+    user_words = set(re.findall(r'[\u4e00-\u9fff]+|[a-zA-Z]+', user_message))
+    
+    # 计算其他关键字重叠
+    for word in user_words:
+        if len(word) >= 2:  # 至少2个字符
+            # 跳过已经是角色名称的词（已在上面处理）
+            if word in character_names:
+                continue
+                
+            word_lower = word.lower()
+            count = chunk_lower.count(word_lower)
+            
+            # 普通词权重：长词权重更高
+            score += count * (len(word) / 5.0)
+    
+    # 时间线索：可以根据 current_time 调整，这里先简单实现
+    # 可以添加基于时间的关键字匹配（如"初期"、"中期"等）
+    time_keywords = {
+        "初期": [0, 10],
+        "中期": [10, 30],
+        "后期": [30, 100]
+    }
+    
+    return score
+
+def retrieve_relevant_chunks(story_text: str, user_message: str, current_time: int, top_k: int = 3) -> list[str]:
+    """
+    检索相关的 chunks
+    
+    Args:
+        story_text: 完整的故事文本
+        user_message: 用户消息
+        current_time: 当前时间（state.time）
+        top_k: 返回 top-k 个 chunks
+    
+    Returns:
+        top-k 个最相关的 chunks
+    """
+    chunks = chunk_story(story_text)
+    if not chunks:
+        return []
+    
+    # 计算每个 chunk 的分数
+    scored_chunks = []
+    for chunk in chunks:
+        score = score_chunk(chunk, user_message, current_time)
+        scored_chunks.append((score, chunk))
+    
+    # 按分数排序，取 top-k
+    scored_chunks.sort(key=lambda x: x[0], reverse=True)
+    top_chunks = [chunk for _, chunk in scored_chunks[:top_k]]
+    
+    return top_chunks
+
+def build_chat_prompt(state: Dict[str, Any], user_message: str, lore_chunks: Optional[list[str]] = None) -> list[Dict[str, str]]:
     """
     构建聊天 prompt
+    
+    Args:
+        state: 当前世界状态
+        user_message: 用户消息
+        lore_chunks: 检索到的相关故事 chunks（列表）
     
     Returns:
         messages 列表，用于 LLM 调用
@@ -195,11 +303,13 @@ def build_chat_prompt(state: Dict[str, Any], user_message: str, lore_snippet: Op
 
 USER_MESSAGE: {user_message}"""
     
-    if lore_snippet:
+    if lore_chunks:
+        # 将多个 chunks 组合成 LORE_CONTEXT
+        lore_context = "\n\n---\n\n".join(lore_chunks)
         user_prompt += f"""
 
-LORE_SNIPPET:
-{lore_snippet}"""
+LORE_CONTEXT:
+{lore_context}"""
     
     user_prompt += """
 
@@ -537,15 +647,16 @@ async def act(action: Action):
 @app.post("/chat")
 async def chat(request: Optional[ChatRequest] = None):
     """
-    Chat endpoint - 第一版实现
+    Chat endpoint - 使用检索系统
     
     输入: {message: string}
     处理流程:
     1. load_state()
-    2. 构建 prompt（包含 STATE、USER_MESSAGE、LORE_SNIPPET）
-    3. 调用 LLM 生成 proposed_action 和 narration
-    4. 验证和应用 action
-    5. 返回结果
+    2. 检索相关的故事 chunks（基于用户消息和当前时间）
+    3. 构建 prompt（包含 STATE、USER_MESSAGE、LORE_CONTEXT）
+    4. 调用 LLM 生成 proposed_action 和 narration
+    5. 验证和应用 action
+    6. 返回结果
     """
     if not request or not request.message:
         return {
@@ -556,13 +667,14 @@ async def chat(request: Optional[ChatRequest] = None):
     try:
         # 1. 加载状态
         state = load_state()
+        current_time = state.get("time", 0)
         
-        # 2. 加载故事片段（前 2000 字符）
+        # 2. 检索相关的故事 chunks
         story = load_story()
-        lore_snippet = story[:2000] if len(story) > 2000 else story if story else None
+        lore_chunks = retrieve_relevant_chunks(story, request.message, current_time, top_k=3) if story else None
         
         # 3. 构建 prompt
-        messages = build_chat_prompt(state, request.message, lore_snippet)
+        messages = build_chat_prompt(state, request.message, lore_chunks)
         
         # 4. 调用 LLM
         llm_response = llm_provider.chat_completion(messages, model="supermind-agent-v1")
