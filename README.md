@@ -46,7 +46,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 - `GET /state` - 返回当前世界状态 (JSON)
 - `GET /lore` - 返回故事内容的前 2000 字符 (JSON)
 - `POST /act` - 执行动作（需要先验证，再应用，最后保存状态）
-- `POST /chat` - 使用 `supermind-agent-v1` 模型进行 AI 对话
+- `POST /chat` - AI 对话接口（第一版）：根据用户输入生成动作和叙述
 
 ## AI 调用说明
 
@@ -55,6 +55,55 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 - Base URL: `https://space.ai-builders.com/backend/v1`
 - 模型: `supermind-agent-v1`
 - 认证: 通过 Bearer Token (从环境变量读取)
+
+### LLM 接口设计
+
+系统使用可替换的 LLM 接口抽象 (`LLMProvider`)，当前实现为 `OpenAIProvider`。可以轻松替换为其他 LLM 服务。
+
+### POST /chat 端点说明
+
+**输入：**
+
+```json
+{
+  "message": "用户输入的自然语言"
+}
+```
+
+**处理流程：**
+
+1. 加载当前世界状态 (`load_state()`)
+2. 构建 system prompt（强调遵守 state、不得编造事实等规则）
+3. 构建 user prompt，包含：
+   - `STATE`: 序列化后的 state.json
+   - `USER_MESSAGE`: 用户输入
+   - `LORE_SNIPPET`: story.md 前 2000 字符（可选）
+4. 调用 LLM 生成 JSON 响应：
+   ```json
+   {
+     "proposed_action": <Action>,
+     "narration": "..."
+   }
+   ```
+5. 验证和应用 `proposed_action`
+6. 保存状态
+
+**返回：**
+
+```json
+{
+  "ok": true,
+  "narration": "叙述文字",
+  "action_ok": true/false,
+  "error": "错误信息（如果 action_ok 为 false）",
+  "state": <new_state>
+}
+```
+
+**特殊处理：**
+
+- 如果 `proposed_action` 验证失败，会调用 LLM 生成合理的失败解释（但仍不编造事实）
+- 即使动作失败，也会返回 `ok: true`（请求处理成功），但 `action_ok: false`
 
 ## 世界状态管理
 
@@ -143,8 +192,16 @@ curl -X POST "http://localhost:8000/act" \
     "intent": "把剑给你"
   }'
 
-# 测试 POST /chat
+# 测试 POST /chat（第一版）
 curl -X POST "http://localhost:8000/chat" \
   -H "Content-Type: application/json" \
-  -d '{"message": "你好"}'
+  -d '{"message": "我要前往洛阳"}'
+
+# 预期返回：
+# {
+#   "ok": true,
+#   "narration": "你决定前往洛阳...",
+#   "action_ok": true,
+#   "state": { ... }
+# }
 ```

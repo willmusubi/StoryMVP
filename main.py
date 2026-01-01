@@ -6,7 +6,8 @@ import os
 import json
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, Literal, TYPE_CHECKING
+from typing import Optional, Dict, Any, Literal, TYPE_CHECKING, Protocol
+from abc import ABC, abstractmethod
 
 if TYPE_CHECKING:
     from pydantic import BaseModel as _BaseModel
@@ -18,13 +19,47 @@ load_dotenv()
 
 app = FastAPI()
 
-# 初始化 OpenAI 客户端，指向 AI Builder API
-# 从环境变量读取 API Key（支持 SUPER_MIND_API_KEY 和 AI_BUILDER_TOKEN）
+# ==================== LLM 接口抽象 ====================
+
+class LLMProvider(ABC):
+    """可替换的 LLM 接口"""
+    
+    @abstractmethod
+    def chat_completion(self, messages: list[Dict[str, str]], model: str = "supermind-agent-v1") -> str:
+        """
+        调用 LLM 生成回复
+        
+        Args:
+            messages: 消息列表，格式 [{"role": "system", "content": "..."}, ...]
+            model: 模型名称
+        
+        Returns:
+            LLM 生成的文本内容
+        """
+        pass
+
+class OpenAIProvider(LLMProvider):
+    """OpenAI SDK 实现"""
+    
+    def __init__(self, base_url: str, api_key: str):
+        self.client = OpenAI(
+            base_url=base_url,
+            api_key=api_key,
+        )
+    
+    def chat_completion(self, messages: list[Dict[str, str]], model: str = "supermind-agent-v1") -> str:
+        completion = self.client.chat.completions.create(
+            model=model,
+            messages=messages
+        )
+        return completion.choices[0].message.content if completion.choices else ""
+
+# 初始化 LLM Provider
 api_key = os.getenv("SUPER_MIND_API_KEY") or os.getenv("AI_BUILDER_TOKEN")
 if not api_key:
     raise ValueError("请设置 SUPER_MIND_API_KEY 或 AI_BUILDER_TOKEN 环境变量")
 
-client = OpenAI(
+llm_provider: LLMProvider = OpenAIProvider(
     base_url="https://space.ai-builders.com/backend/v1",
     api_key=api_key,
 )
@@ -101,6 +136,146 @@ def load_story() -> str:
             return f.read()
     except IOError:
         return ""
+
+def build_chat_prompt(state: Dict[str, Any], user_message: str, lore_snippet: Optional[str] = None) -> list[Dict[str, str]]:
+    """
+    构建聊天 prompt
+    
+    Returns:
+        messages 列表，用于 LLM 调用
+    """
+    # System prompt
+    system_prompt = """你是三国剧情引擎。你的职责是根据用户输入和当前世界状态，生成合理的动作和叙述。
+
+**重要规则（必须严格遵守）：**
+1. 必须遵守 state 中的世界状态
+2. 不得编造已死角色存活（alive=false 的角色不能出现）
+3. 不得让物品瞬移（物品必须在当前拥有者手中）
+4. 不得修改 state（只能通过 proposed_action 来改变状态）
+5. 只能输出严格 JSON 格式，不要添加任何其他文本
+
+**输出格式（必须是有效的 JSON）：**
+{
+  "proposed_action": {
+    "type": "talk" | "give_item" | "move" | "attack" | "rescue",
+    "actor": "player",
+    "target": "角色ID或物品ID（可选）",
+    "to_location": "位置（仅 move 需要）",
+    "item": "物品ID（仅 give_item 需要）",
+    "intent": "自然语言描述动作意图"
+  },
+  "narration": "一段叙述文字，描述发生了什么"
+}
+
+**动作类型说明：**
+- talk: 与角色对话
+- give_item: 给角色物品
+- move: 移动到新位置
+- attack: 攻击角色
+- rescue: 救援角色
+
+**注意事项：**
+- proposed_action 必须符合动作协议规范
+- narration 应该生动描述动作和结果
+- 如果用户意图不合理（如对死亡角色说话），narration 应该合理解释为什么无法执行
+"""
+    
+    # 构建用户 prompt
+    user_prompt = f"""STATE:
+{json.dumps(state, ensure_ascii=False, indent=2)}
+
+USER_MESSAGE: {user_message}"""
+    
+    if lore_snippet:
+        user_prompt += f"""
+
+LORE_SNIPPET:
+{lore_snippet}"""
+    
+    user_prompt += """
+
+请根据以上信息，生成 proposed_action 和 narration。输出必须是有效的 JSON。"""
+    
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+
+def parse_llm_response(response_text: str) -> Dict[str, Any]:
+    """
+    解析 LLM 返回的 JSON
+    
+    Returns:
+        {"proposed_action": Action, "narration": str} 或 None（如果解析失败）
+    """
+    try:
+        # 尝试提取 JSON（可能包含 markdown 代码块）
+        text = response_text.strip()
+        
+        # 如果包含 ```json 或 ```，提取其中的 JSON
+        if "```json" in text:
+            start = text.find("```json") + 7
+            end = text.find("```", start)
+            if end != -1:
+                text = text[start:end].strip()
+        elif "```" in text:
+            start = text.find("```") + 3
+            end = text.find("```", start)
+            if end != -1:
+                text = text[start:end].strip()
+        
+        # 解析 JSON
+        data = json.loads(text)
+        
+        if "proposed_action" not in data or "narration" not in data:
+            return None
+        
+        return data
+    except (json.JSONDecodeError, KeyError) as e:
+        return None
+
+def explain_action_failure(action: "Action", validation_result: Dict[str, Any], state: Dict[str, Any]) -> str:
+    """
+    当 action 验证失败时，让 LLM 生成合理的解释
+    
+    Returns:
+        解释失败原因的叙述文字
+    """
+    error_reason = validation_result.get("reason", "未知错误")
+    
+    # 兼容 Pydantic v1 和 v2
+    try:
+        action_dict = action.model_dump()  # Pydantic v2
+    except AttributeError:
+        action_dict = action.dict()  # Pydantic v1
+    
+    prompt = f"""动作验证失败，需要生成合理的叙述来解释为什么无法执行。
+
+失败的动作:
+{json.dumps(action_dict, ensure_ascii=False, indent=2)}
+
+失败原因: {error_reason}
+
+当前状态:
+{json.dumps(state, ensure_ascii=False, indent=2)}
+
+请生成一段合理的叙述，解释为什么这个动作无法执行。叙述应该：
+1. 符合三国背景
+2. 合理解释失败原因（但不要编造事实）
+3. 保持角色一致性
+
+只输出叙述文字，不要输出 JSON 或其他格式。"""
+    
+    try:
+        messages = [
+            {"role": "system", "content": "你是一个三国剧情叙述者，负责解释为什么某些动作无法执行。"},
+            {"role": "user", "content": prompt}
+        ]
+        explanation = llm_provider.chat_completion(messages, model="supermind-agent-v1")
+        return explanation.strip()
+    except Exception as e:
+        # 如果 LLM 调用失败，返回简单解释
+        return f"无法执行该动作：{error_reason}"
 
 def validate_action(state: Dict[str, Any], action: "Action") -> Dict[str, Any]:
     """
@@ -347,42 +522,104 @@ async def act(action: Action):
 @app.post("/chat")
 async def chat(request: Optional[ChatRequest] = None):
     """
-    Chat endpoint that uses the AI Builder API with supermind-agent-v1 model.
-    All AI calls use the OpenAI SDK pointing to the correct base URL.
+    Chat endpoint - 第一版实现
     
-    If no message is provided, returns {"ok": true} as a simple response.
+    输入: {message: string}
+    处理流程:
+    1. load_state()
+    2. 构建 prompt（包含 STATE、USER_MESSAGE、LORE_SNIPPET）
+    3. 调用 LLM 生成 proposed_action 和 narration
+    4. 验证和应用 action
+    5. 返回结果
     """
-    # 如果没有提供消息，返回简单的确认响应
     if not request or not request.message:
-        return {"ok": True}
-    
-    try:
-        # 使用 OpenAI SDK 调用 AI Builder API
-        # 模型必须是 supermind-agent-v1
-        # Base URL: https://space.ai-builders.com/backend/v1
-        completion = client.chat.completions.create(
-            model="supermind-agent-v1",
-            messages=[
-                {
-                    "role": "user",
-                    "content": request.message
-                }
-            ]
-        )
-        
-        # 返回响应
-        return {
-            "ok": True,
-            "response": completion.choices[0].message.content if completion.choices else None,
-            "usage": {
-                "prompt_tokens": completion.usage.prompt_tokens if completion.usage else 0,
-                "completion_tokens": completion.usage.completion_tokens if completion.usage else 0,
-                "total_tokens": completion.usage.total_tokens if completion.usage else 0,
-            } if completion.usage else None
-        }
-    except Exception as e:
         return {
             "ok": False,
-            "error": str(e)
+            "error": "message 字段是必需的"
+        }
+    
+    try:
+        # 1. 加载状态
+        state = load_state()
+        
+        # 2. 加载故事片段（前 2000 字符）
+        story = load_story()
+        lore_snippet = story[:2000] if len(story) > 2000 else story if story else None
+        
+        # 3. 构建 prompt
+        messages = build_chat_prompt(state, request.message, lore_snippet)
+        
+        # 4. 调用 LLM
+        llm_response = llm_provider.chat_completion(messages, model="supermind-agent-v1")
+        
+        # 5. 解析 LLM 响应
+        parsed = parse_llm_response(llm_response)
+        
+        if not parsed:
+            return {
+                "ok": False,
+                "error": "无法解析 LLM 响应为有效 JSON",
+                "llm_response": llm_response[:500] if llm_response else None,
+                "state": state
+            }
+        
+        proposed_action_dict = parsed.get("proposed_action")
+        narration = parsed.get("narration", "")
+        
+        if not proposed_action_dict:
+            return {
+                "ok": False,
+                "error": "LLM 响应中缺少 proposed_action",
+                "narration": narration,
+                "state": state
+            }
+        
+        # 6. 创建 Action 对象并验证
+        try:
+            proposed_action = Action(**proposed_action_dict)
+        except Exception as e:
+            return {
+                "ok": False,
+                "error": f"proposed_action 格式错误: {str(e)}",
+                "narration": narration,
+                "state": state
+            }
+        
+        # 7. 验证动作
+        validation = validate_action(state, proposed_action)
+        
+        if not validation["ok"]:
+            # 动作验证失败，让 LLM 生成合理的解释
+            failure_narration = explain_action_failure(proposed_action, validation, state)
+            
+            return {
+                "ok": True,  # 请求处理成功，只是动作未执行
+                "narration": failure_narration,
+                "action_ok": False,
+                "error": validation.get("reason"),
+                "state": state  # 状态未改变
+            }
+        
+        # 8. 应用动作
+        new_state = apply_action(state, proposed_action)
+        
+        # 9. 保存状态
+        save_state(new_state)
+        
+        # 10. 返回结果
+        return {
+            "ok": True,
+            "narration": narration,
+            "action_ok": True,
+            "state": new_state
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "ok": False,
+            "error": str(e),
+            "state": load_state()  # 返回当前状态
         }
 
