@@ -1,9 +1,9 @@
 {
-  "time": 8,
+  "time": 14,
   "characters": {
     "player": {
       "alive": true,
-      "location": "chang_an",
+      "location": "洛阳",
       "affinity_to_player": 100
     }
   },

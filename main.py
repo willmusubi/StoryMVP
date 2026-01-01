@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi import Request
 from dotenv import load_dotenv
 from openai import OpenAI
 import os
@@ -18,6 +21,10 @@ else:
 load_dotenv()
 
 app = FastAPI()
+
+# 设置模板和静态文件
+templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ==================== LLM 接口抽象 ====================
 
@@ -448,35 +455,9 @@ def apply_action(state: Dict[str, Any], action: "Action") -> Dict[str, Any]:
     return new_state
 
 @app.get("/", response_class=HTMLResponse)
-async def root():
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>三国 MVP</title>
-        <meta charset="utf-8">
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-                margin: 0;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            }
-            h1 {
-                color: white;
-                font-size: 3em;
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Hello 三国 MVP</h1>
-    </body>
-    </html>
-    """
+async def root(request: Request):
+    """返回聊天界面"""
+    return templates.TemplateResponse("index.html", {"request": request})
 
 class ChatRequest(BaseModel):
     message: Optional[str] = None
