@@ -81,7 +81,8 @@ def load_state() -> Dict[str, Any]:
         default_state = {
             "time": 0,
             "characters": {},
-            "items": {}
+            "items": {},
+            "events": []  # 事件列表，用于 timeline 验证
         }
         save_state(default_state)
         return default_state
@@ -94,7 +95,8 @@ def load_state() -> Dict[str, Any]:
         default_state = {
             "time": 0,
             "characters": {},
-            "items": {}
+            "items": {},
+            "events": []  # 事件列表，用于 timeline 验证
         }
         save_state(default_state)
         return default_state
@@ -342,6 +344,25 @@ def validate_action(state: Dict[str, Any], action: "Action") -> Dict[str, Any]:
         if not target_char.get("alive", True):
             return {"ok": False, "reason": f"目标角色 {action.target} 已死亡，无法执行 {action.type}"}
     
+    # Timeline 验证：如果提供了 event，检查 timeline 规则
+    if action.event:
+        events = state.get("events", [])
+        current_time = state.get("time", 0)
+        
+        # 规则 1: 不能重复发生同一唯一事件
+        for event in events:
+            if event.get("id") == action.event:
+                return {"ok": False, "reason": f"事件 {action.event} 已经发生过，不能重复"}
+        
+        # 规则 2: 事件必须按 state.time 单调递增
+        # 新事件的 time 将是 next_time（因为 apply_action 会先增加 time）
+        # 如果 events 不为空，最后一个事件的 time 必须 < next_time
+        next_time = current_time + 1
+        if events:
+            last_event_time = events[-1].get("time", 0)
+            if last_event_time >= next_time:
+                return {"ok": False, "reason": f"事件时间不单调递增：最后事件时间 {last_event_time} >= 下一个时间 {next_time}"}
+    
     return {"ok": True}
 
 def apply_action(state: Dict[str, Any], action: "Action") -> Dict[str, Any]:
@@ -412,6 +433,18 @@ def apply_action(state: Dict[str, Any], action: "Action") -> Dict[str, Any]:
             current_affinity = target_char.get("affinity_to_player", 0)
             target_char["affinity_to_player"] = min(100, current_affinity + 30)
     
+    # 如果提供了 event，添加到 events 列表
+    if action.event:
+        if "events" not in new_state:
+            new_state["events"] = []
+        
+        new_state["events"].append({
+            "id": action.event,
+            "time": new_state["time"],  # 使用更新后的 time
+            "type": action.type,
+            "actor": action.actor
+        })
+    
     return new_state
 
 @app.get("/", response_class=HTMLResponse)
@@ -458,6 +491,7 @@ class Action(BaseModel):
     to_location: Optional[str] = Field(default=None, description="目标位置（用于 move）")
     item: Optional[str] = Field(default=None, description="物品ID（用于 give_item）")
     intent: str = Field(description="自然语言描述动作意图")
+    event: Optional[str] = Field(default=None, description="可选的事件ID，用于 timeline 验证")
 
 @app.get("/state")
 async def get_state():

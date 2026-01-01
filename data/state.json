@@ -1,5 +1,5 @@
 {
-  "time": 5,
+  "time": 8,
   "characters": {
     "player": {
       "alive": true,
@@ -7,5 +7,6 @@
       "affinity_to_player": 100
     }
   },
-  "items": {}
+  "items": {},
+  "events": []
 }
