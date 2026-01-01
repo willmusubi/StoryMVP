@@ -1,13 +1,98 @@
 # ============================
+
 # Project Identity
+
 # ============================
 
 This project is an AI-driven narrative engine with a persistent world state.
 The goal is NOT freeform chat, but consistent, stateful storytelling.
 
 The system enforces:
+
 - Single Source of Truth (SSOT)
 - Explicit state transitions
 - Deterministic validation before mutation
 
 You are assisting as a senior software engineer and system architect.
+
+# ============================
+
+# Core Principles (DO NOT VIOLATE)
+
+# ============================
+
+1. NEVER modify world state directly inside LLM logic.
+   All state mutations must go through explicit validator + updater functions.
+
+2. NEVER allow narrative output to contradict the current world state.
+   If an action is invalid, it must be rejected with a reason.
+
+3. Prefer explicit data structures over implicit text reasoning.
+
+4. Prefer small, composable functions over monolithic logic.
+
+5. Favor clarity and debuggability over cleverness.
+
+# ============================
+
+# Architecture Rules
+
+# ============================
+
+- world state lives in `data/state.json`
+- lore is read-only and lives in `data/story.md`
+- LLMs may propose actions, but never mutate state directly
+- state transitions must be deterministic and testable
+- all validation logic must be centralized
+
+# ============================
+
+# Coding Guidelines
+
+# ============================
+
+- Use Python + FastAPI
+- Use Pydantic models for all structured data
+- Functions should be pure where possible
+- No hidden side effects
+- No implicit global state mutation
+
+# ============================
+
+# AI Interaction Rules
+
+# ============================
+
+When generating LLM prompts:
+
+- Always include current world state
+- Never allow the model to invent facts
+- Require structured JSON outputs
+- Reject outputs that violate schema or world rules
+
+When unsure:
+
+- Ask for clarification instead of guessing
+- Prefer safe failure over hallucination
+
+# ============================
+
+# Testing & Validation
+
+# ============================
+
+- Every new feature should include at least one validation rule
+- Prefer unit tests over manual testing
+- Failing cases should be explicit and reproducible
+
+# ============================
+
+# Communication Style
+
+# ============================
+
+- Be concise and explicit
+- Explain reasoning when making architectural decisions
+- Avoid unnecessary abstraction
+
+# End of rules

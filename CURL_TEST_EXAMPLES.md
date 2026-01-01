@@ -29,7 +29,7 @@ curl -X POST "http://localhost:8000/act" \
     "characters": {
       "player": {
         "alive": true,
-        "location": "luo_yang",  // ✅ 位置已更新
+        "location": "luo_yang", // ✅ 位置已更新
         "affinity_to_player": 100
       }
     },
@@ -69,7 +69,7 @@ curl -X POST "http://localhost:8000/act" \
 ```json
 {
   "ok": false,
-  "error": "物品 sword_1 不属于 player，当前拥有者: liu_bei",  // ✅ 返回明确的错误原因
+  "error": "物品 sword_1 不属于 player，当前拥有者: liu_bei", // ✅ 返回明确的错误原因
   "state": {
     // 当前状态（未改变）
   }
@@ -108,7 +108,7 @@ curl -X POST "http://localhost:8000/act" \
 ```json
 {
   "ok": false,
-  "error": "目标角色 dead_char 已死亡，无法执行 talk",  // ✅ 返回明确的错误原因
+  "error": "目标角色 dead_char 已死亡，无法执行 talk", // ✅ 返回明确的错误原因
   "state": {
     // 当前状态（未改变）
   }
@@ -134,7 +134,7 @@ curl -X POST "http://localhost:8000/act" \
 ```json
 {
   "ok": false,
-  "error": "目标角色 dead_char 已死亡，无法执行 rescue",  // ✅ 返回明确的错误原因
+  "error": "目标角色 dead_char 已死亡，无法执行 rescue", // ✅ 返回明确的错误原因
   "state": {
     // 当前状态（未改变）
   }
@@ -232,4 +232,3 @@ python3 test_specific_scenarios.py
 1. 确保服务正在运行：`uvicorn main:app --reload`
 2. 测试会修改 `data/state.json`，建议备份
 3. 某些测试需要特定的状态数据，确保状态文件包含必要的角色和物品
-

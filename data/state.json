@@ -1,12 +1,216 @@
 {
-  "time": 18,
+  "time": 20,
   "characters": {
     "player": {
       "alive": true,
-      "location": "洛阳",
+      "location": "涿郡",
       "affinity_to_player": 100
+    },
+    "刘备": {
+      "alive": true,
+      "location": "平原县",
+      "affinity_to_player": 60,
+      "title": "平原县令",
+      "description": "字玄德，中山靖王之后，为人仁德宽厚"
+    },
+    "关羽": {
+      "alive": true,
+      "location": "平原县",
+      "affinity_to_player": 70,
+      "title": "马弓手",
+      "description": "字云长，义薄云天，武艺超群"
+    },
+    "张飞": {
+      "alive": true,
+      "location": "平原县",
+      "affinity_to_player": 70,
+      "title": "步弓手",
+      "description": "字翼德，性格刚烈，勇猛过人"
+    },
+    "曹操": {
+      "alive": true,
+      "location": "兖州",
+      "affinity_to_player": 40,
+      "title": "镇东将军",
+      "description": "字孟德，胸怀大志，善于用人"
+    },
+    "董卓": {
+      "alive": true,
+      "location": "长安",
+      "affinity_to_player": -50,
+      "title": "相国",
+      "description": "字仲颖，专权跋扈，残暴不仁"
+    },
+    "吕布": {
+      "alive": true,
+      "location": "长安",
+      "affinity_to_player": 0,
+      "title": "温侯",
+      "description": "字奉先，勇冠三军，但见利忘义"
+    },
+    "貂蝉": {
+      "alive": true,
+      "location": "长安",
+      "affinity_to_player": 30,
+      "title": "歌伎",
+      "description": "王允义女，国色天香，为除董卓而献身"
+    },
+    "王允": {
+      "alive": true,
+      "location": "长安",
+      "affinity_to_player": 50,
+      "title": "司徒",
+      "description": "字子师，忠于汉室，设计除董卓"
+    },
+    "袁绍": {
+      "alive": true,
+      "location": "冀州",
+      "affinity_to_player": 30,
+      "title": "渤海太守",
+      "description": "字本初，四世三公，十八路诸侯盟主"
+    },
+    "袁术": {
+      "alive": true,
+      "location": "南阳",
+      "affinity_to_player": 20,
+      "title": "后将军",
+      "description": "字公路，袁绍之弟，野心勃勃"
+    },
+    "孙坚": {
+      "alive": true,
+      "location": "江东",
+      "affinity_to_player": 40,
+      "title": "乌程侯",
+      "description": "字文台，江东猛虎，已战死"
+    },
+    "孙策": {
+      "alive": true,
+      "location": "江东",
+      "affinity_to_player": 35,
+      "title": "小霸王",
+      "description": "字伯符，孙坚长子，勇猛果敢"
+    },
+    "赵云": {
+      "alive": true,
+      "location": "平原县",
+      "affinity_to_player": 50,
+      "title": "骑将",
+      "description": "字子龙，常山真定人，忠勇无双"
+    },
+    "荀彧": {
+      "alive": true,
+      "location": "兖州",
+      "affinity_to_player": 45,
+      "title": "行军司马",
+      "description": "字文若，曹操谋士，有王佐之才"
+    },
+    "郭嘉": {
+      "alive": true,
+      "location": "兖州",
+      "affinity_to_player": 40,
+      "title": "军师祭酒",
+      "description": "字奉孝，曹操谋士，智谋过人"
+    },
+    "典韦": {
+      "alive": true,
+      "location": "兖州",
+      "affinity_to_player": 35,
+      "title": "帐前都尉",
+      "description": "字恶来，勇力过人，曹操护卫"
+    },
+    "夏侯惇": {
+      "alive": true,
+      "location": "兖州",
+      "affinity_to_player": 30,
+      "title": "将军",
+      "description": "字元让，曹操族弟，勇猛善战"
+    },
+    "马超": {
+      "alive": true,
+      "location": "西凉",
+      "affinity_to_player": 25,
+      "title": "少将军",
+      "description": "字孟起，西凉马腾之子，英勇无敌"
+    },
+    "诸葛亮": {
+      "alive": true,
+      "location": "南阳",
+      "affinity_to_player": 20,
+      "title": "隐士",
+      "description": "字孔明，号卧龙，未出山"
     }
   },
-  "items": {},
+  "items": {
+    "青龙偃月刀": {
+      "name": "青龙偃月刀",
+      "owner": "关羽",
+      "type": "weapon",
+      "description": "关羽的成名兵器，重八十二斤",
+      "value": 100
+    },
+    "丈八蛇矛": {
+      "name": "丈八蛇矛",
+      "owner": "张飞",
+      "type": "weapon",
+      "description": "张飞的兵器，长一丈八尺",
+      "value": 100
+    },
+    "双股剑": {
+      "name": "双股剑",
+      "owner": "刘备",
+      "type": "weapon",
+      "description": "刘备的佩剑，雌雄双剑",
+      "value": 80
+    },
+    "方天画戟": {
+      "name": "方天画戟",
+      "owner": "吕布",
+      "type": "weapon",
+      "description": "吕布的兵器，威震天下",
+      "value": 120
+    },
+    "赤兔马": {
+      "name": "赤兔马",
+      "owner": "吕布",
+      "type": "mount",
+      "description": "日行千里，渡水登山如履平地",
+      "value": 150
+    },
+    "传国玉玺": {
+      "name": "传国玉玺",
+      "owner": "孙坚",
+      "type": "treasure",
+      "description": "受命于天，既寿永昌",
+      "value": 1000
+    },
+    "七星宝刀": {
+      "name": "七星宝刀",
+      "owner": "王允",
+      "type": "weapon",
+      "description": "王允家传宝刀，曾借与曹操刺董卓",
+      "value": 200
+    },
+    "双铁戟": {
+      "name": "双铁戟",
+      "owner": "典韦",
+      "type": "weapon",
+      "description": "典韦的兵器，重八十斤",
+      "value": 100
+    },
+    "青釭剑": {
+      "name": "青釭剑",
+      "owner": "曹操",
+      "type": "weapon",
+      "description": "曹操的佩剑，削铁如泥",
+      "value": 150
+    },
+    "倚天剑": {
+      "name": "倚天剑",
+      "owner": "曹操",
+      "type": "weapon",
+      "description": "曹操的佩剑，与青釭剑齐名",
+      "value": 150
+    }
+  },
   "events": []
 }

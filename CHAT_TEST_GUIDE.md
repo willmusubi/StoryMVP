@@ -21,6 +21,7 @@ curl -X POST "http://localhost:8000/chat" \
 ```
 
 **预期返回：**
+
 ```json
 {
   "ok": true,
@@ -47,6 +48,7 @@ curl -X POST "http://localhost:8000/chat" \
 ```
 
 **预期：**
+
 - 生成 `talk` 动作
 - 如果包含"帮"字，好感度应该增加
 - 返回合理的叙述
@@ -60,6 +62,7 @@ curl -X POST "http://localhost:8000/chat" \
 ```
 
 **预期：**
+
 - LLM 可能生成 `talk` 动作
 - 动作验证失败（目标已死亡）
 - 返回 `action_ok: false`
@@ -74,6 +77,7 @@ curl -X POST "http://localhost:8000/chat" \
 ```
 
 **预期返回：**
+
 ```json
 {
   "ok": false,
@@ -138,4 +142,3 @@ python3 test_chat_endpoint.py
 2. 查看返回的 `llm_response` 字段（如果解析失败）
 3. 检查 `error` 字段了解具体错误
 4. 验证 API Key 是否正确设置
-
