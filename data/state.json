@@ -1,9 +1,9 @@
 {
-  "time": 20,
+  "time": 23,
   "characters": {
     "player": {
       "alive": true,
-      "location": "涿郡",
+      "location": "平原县",
       "affinity_to_player": 100
     },
     "刘备": {
@@ -143,7 +143,7 @@
   "items": {
     "青龙偃月刀": {
       "name": "青龙偃月刀",
-      "owner": "关羽",
+      "owner": "player",
       "type": "weapon",
       "description": "关羽的成名兵器，重八十二斤",
       "value": 100
